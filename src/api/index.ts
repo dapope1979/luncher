@@ -1,5 +1,5 @@
 import { app, ipcMain } from "electron";
-import { readdir } from "fs/promises";
+import { readdir, readFile } from "fs/promises";
 
 declare global {
   interface Window {
@@ -10,6 +10,13 @@ declare global {
 }
 
 const prismInstanceConfig = /\/instance\.cfg$/;
+const prismInstanceName = /name=(.*)$/m;
+
+interface PrismFlatpakInstance {
+  path: string;
+  name: string;
+  command: string;
+}
 
 // Don't forget to add any new handlers to the context bridge in preload.ts
 export const registerApiHandlers = () => {
@@ -20,7 +27,28 @@ export const registerApiHandlers = () => {
     const contents = await readdir(`${path}/${prismFlatpakInstances}`, {
       recursive: true,
     });
-    const instances = contents.filter((item) => prismInstanceConfig.test(item));
-    return instances;
+    const instanceConfigs = contents.filter((item) =>
+      prismInstanceConfig.test(item),
+    );
+
+    instanceConfigs.forEach(async (instanceConfig) => {
+      const contents = (
+        await readFile(`${path}/${prismFlatpakInstances}/${instanceConfig}`)
+      ).toString();
+
+      const matches = contents.match(prismInstanceName);
+      const instanceName = matches[1];
+      const instancePath = instanceConfig.replace("/instance.cfg", "");
+      const instance = {
+        name: instanceName,
+        path: instancePath,
+        command: `flatpak run org.prismlauncher.PrismLauncher --launch "${instancePath}"`,
+      } as PrismFlatpakInstance;
+      console.log(instance);
+    });
+
+    // TODO: read servers, worlds, accounts?
+    //https://github.com/PrismarineJS/prismarine-nbt
+    return instanceConfigs;
   });
 };
